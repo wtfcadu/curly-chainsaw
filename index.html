@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive sphere of particles</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+            color: white;
+        }
+        canvas {
+            display: block;
+        }
+        .error-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-message" id="error-message">
+        Failed to load Three.js or display the sphere.<br>
+        Please check your internet connection and reload the page.
+    </div>
+
+    <!-- Подключение Three.js -->
+    <script src="script2.js"></script>
+    
+    <!-- Подключение основного скрипта -->
+    <script src="script.js"></script>
+</body>
+</html> 
