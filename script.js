@@ -24,6 +24,11 @@ let sideWaveSpeed = 0.3;
 let sideWaveFrequency = 0.5;
 let sideWaveWidth = 0.7;
 
+// At the top of script.js, make sure these variables are accessible globally
+window.particleSystem = null;
+window.sphere = null;
+window.panelOffset = 0; // Track the current offset
+
 // Check if Three.js is loaded
 window.addEventListener('DOMContentLoaded', function() {
     if (typeof THREE === 'undefined') {
@@ -42,9 +47,12 @@ function init() {
     // Create scene, camera and renderer
     scene = new THREE.Scene();
     camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer = new THREE.WebGLRenderer({ 
+        antialias: true,
+        alpha: true // Enable alpha (transparency)
+    });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(0x000000); // Black background
+    renderer.setClearColor(0x000000, 0); // Transparent background (alpha = 0)
     document.body.appendChild(renderer.domElement);
 
     // Camera setup - increase distance
@@ -95,10 +103,10 @@ function init() {
         velocity[i * 3 + 1] = 0;
         velocity[i * 3 + 2] = 0;
 
-        // Particle color (white by default)
-        const colorIntensity = 0.7 + Math.random() * 0.3; // Base intensity
+        // Particle color (black by default)
+        const colorIntensity = 0.1 + Math.random() * 0.1; // Lower intensity for black
         
-        // Make particles white
+        // Make particles black
         colors[i * 3] = colorIntensity;     // Red
         colors[i * 3 + 1] = colorIntensity; // Green
         colors[i * 3 + 2] = colorIntensity; // Blue
@@ -154,8 +162,8 @@ function init() {
             // Combine cross and glow effect
             float brightness = cross > 0.5 ? 1.0 : glow;
             
-            // Make the color white
-            vec3 finalColor = vec3(1.0, 1.0, 1.0); // Pure white
+            // Make the color black
+            vec3 finalColor = vec3(0.0, 0.0, 0.0); // Pure black
             
             // Enhance brightness at edges for visible sphere edge
             brightness *= (1.0 + vDistance * 0.5);
@@ -169,7 +177,7 @@ function init() {
         fragmentShader: fragmentShader,
         transparent: true,
         depthWrite: false,
-        blending: THREE.NormalBlending,
+        blending: THREE.AdditiveBlending, // Changed to additive blending for better glow effect
     });
 
     // Create particle system
@@ -195,6 +203,10 @@ function init() {
     window.addEventListener('mousemove', onMouseMove);
     
     console.log("Three.js scene initialized");
+
+    // Make accessible globally
+    window.particleSystem = particleSystem;
+    window.sphere = sphere;
 }
 
 // Window resize handler
@@ -207,7 +219,21 @@ function onWindowResize() {
 // Mouse movement handler
 function onMouseMove(event) {
     // Convert mouse coordinates to normalized coordinates from -1 to 1
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    // Adjust for the panel offset
+    const offsetX = window.panelOffset || 0;
+    
+    // Calculate mouse position with adjustment for sphere position
+    if (offsetX !== 0) {
+        // When panel is open, adjust mouse X coordinate to match visual position
+        const windowHalfX = window.innerWidth / 2;
+        const adjustedClientX = event.clientX - offsetX;
+        mouse.x = (adjustedClientX / window.innerWidth) * 2 - 1;
+    } else {
+        // Normal behavior when panel is closed
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    }
+    
+    // Y coordinate stays the same
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 }
 
@@ -220,17 +246,18 @@ function updateParticles() {
     // Get intersection point of ray with invisible sphere
     raycaster.setFromCamera(mouse, camera);
     
-    // Create a temporary sphere for intersection testing
+    // Create a temporary sphere that matches the current position of our sphere
+    // This ensures raycasting works correctly when the sphere moves
     const tempSphere = new THREE.Mesh(
         new THREE.SphereGeometry(sphereRadius, 32, 32),
         new THREE.MeshBasicMaterial({ visible: false })
     );
     
-    // Apply the inverse rotation to the temporary sphere
+    // Copy position and rotation from the actual sphere
+    tempSphere.position.copy(sphere.position);
     tempSphere.rotation.copy(sphere.rotation);
-    tempSphere.rotation.x = -sphere.rotation.x;
-    tempSphere.rotation.y = -sphere.rotation.y;
     
+    // Check for intersections with the temp sphere
     const intersects = raycaster.intersectObject(tempSphere);
 
     // Get attributes
@@ -242,13 +269,11 @@ function updateParticles() {
 
     // Wave center - either intersection point or null
     let waveCenter = null;
+    let intersectionPoint = new THREE.Vector3();
 
     if (intersects.length > 0) {
-        // Get the intersection point and rotate it back to match the sphere's rotation
-        const intersectionPoint = intersects[0].point.clone();
-        intersectionPoint.applyAxisAngle(new THREE.Vector3(0, 1, 0), sphere.rotation.y);
-        intersectionPoint.applyAxisAngle(new THREE.Vector3(1, 0, 0), sphere.rotation.x);
-        
+        // Use the intersection point for wave effects
+        intersectionPoint.copy(intersects[0].point);
         waveCenter = intersectionPoint;
         
         // Normal at the intersection point (direction from sphere center)
@@ -311,19 +336,19 @@ function updateParticles() {
                 velocities[index + 1] = (newPos.y - positions[index + 1]) * waveSpeed;
                 velocities[index + 2] = (newPos.z - positions[index + 2]) * waveSpeed;
 
-                // Update particle color to green during interaction
-                const colorIntensity = 0.7 + 0.3 * force;
-                colors[index] = 0.2;  // Low red
-                colors[index + 1] = colorIntensity; // High green
-                colors[index + 2] = 0.2; // Low blue
+                // Update particle color during interaction (dark green)
+                const colorIntensity = 0.3 * force;
+                colors[index] = 0.0;                  // No red
+                colors[index + 1] = colorIntensity;   // Little green
+                colors[index + 2] = 0.0;              // No blue
                 
                 // Increase particle size during interaction
                 sizes[i] = particleSize * (1.0 + force * 0.5);
             } else {
-                // Gradually return to white
-                colors[index] = 0.7 + Math.random() * 0.3;     // White
-                colors[index + 1] = 0.7 + Math.random() * 0.3; // White
-                colors[index + 2] = 0.7 + Math.random() * 0.3; // White
+                // Gradually return to black
+                colors[index] = 0.1 + Math.random() * 0.1;     // Dark
+                colors[index + 1] = 0.1 + Math.random() * 0.1; // Dark
+                colors[index + 2] = 0.1 + Math.random() * 0.1; // Dark
                 
                 // Return size to original
                 sizes[i] = Math.max(particleSize, sizes[i] - 0.05);
@@ -475,25 +500,24 @@ function updateParticles() {
     particleSystem.geometry.attributes.size.needsUpdate = true;
 }
 
-// Animation function
+// Animation function - don't modify x position here
 function animate() {
     requestAnimationFrame(animate);
     
     // Time for floating animation
     const time = Date.now() * 0.001; // Convert to seconds
     
-    // Gentle floating motion
+    // Gentle floating motion - apply only to Y and Z, not X
     const floatY = Math.sin(time * 0.5) * 5; // Up and down motion
-    const floatX = Math.sin(time * 0.3) * 2; // Slight side-to-side
     const floatZ = Math.cos(time * 0.4) * 2; // Slight forward-backward
     
     // Very slow rotation
     const rotationY = Math.sin(time * 0.2) * 0.02; // Very subtle rotation
     const rotationX = Math.cos(time * 0.15) * 0.01;
     
-    // Apply floating motion
+    // Apply Y and Z floating motion but preserve X position
+    // (X position is controlled by the panel toggle)
     particleSystem.position.y = floatY;
-    particleSystem.position.x = floatX;
     particleSystem.position.z = floatZ;
     
     // Apply rotation
